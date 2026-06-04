@@ -265,9 +265,3 @@ python3 -m meshfix.cli topology \
 ```
 
 Rapor taslagi: `report/report.md`
-
-Gorsel/screenshot plani: `docs/FIGURES.md`
-
-## Plan
-
-Ayrintili proje plani icin [docs/PLAN.md](docs/PLAN.md) dosyasina bak.
