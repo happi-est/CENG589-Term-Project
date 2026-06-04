@@ -1,0 +1,5 @@
+name,vertices,faces,min_angle_deg,avg_min_angle_deg,max_angle_deg,avg_aspect_ratio,low_aspect_count,needle_like_count,cap_like_count,near_zero_area_count,bad_triangle_count
+joint_input.off,221,446,0.478030,9.352340,173.214755,0.168790,199,258,0,0,258
+joint_cleanup_targeted_i10.off,6507,13018,5.032491,35.342621,168.792033,0.591831,0,0,0,0,0
+joint_adaptive_final.off,6061,12126,5.651194,42.130844,167.235149,0.695217,0,0,0,0,0
+joint_output.off,3400,6804,36.002756,53.002790,85.958363,0.867510,0,0,0,0,0

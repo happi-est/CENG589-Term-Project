@@ -1,0 +1,7 @@
+name,vertices,faces,min_angle_deg,avg_min_angle_deg,max_angle_deg,avg_aspect_ratio,low_aspect_count,needle_like_count,cap_like_count,near_zero_area_count,bad_triangle_count
+joint_input.off,221,446,0.478030,9.352340,173.214755,0.168790,199,258,0,0,258
+joint_adaptive_final.off,6061,12126,5.651194,42.130844,167.235149,0.695217,0,0,0,0,0
+car1.off,48798,97536,0.725576,27.036833,177.288662,0.452941,118,1400,2,0,1400
+car1_cleanup.off,48349,96638,4.636712,27.284655,166.418080,0.456966,0,4,0,0,4
+car4.off,14317,28630,0.593133,18.761464,174.544086,0.317511,1612,4787,0,0,4787
+car4_cleanup.off,12308,24612,0.951841,21.684287,176.498153,0.366275,0,5,1,0,5
