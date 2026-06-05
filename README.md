@@ -264,4 +264,4 @@ python3 -m meshfix.cli topology \
   outputs/meshes/car4_cleanup.off
 ```
 
-Rapor taslagi: `report/report.md`
+Rapor: `report.pdf`
