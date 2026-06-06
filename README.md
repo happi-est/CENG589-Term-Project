@@ -13,8 +13,8 @@ Ornek:
 
 ```bash
 python3 -m meshfix.cli analyze \
-  "/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/joint_input.off" \
-  "/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/joint_output.off" \
+  "inputs/joint_input.off" \
+  "inputs/joint_output.off" \
   --csv outputs/metrics.csv
 ```
 
@@ -22,7 +22,7 @@ Bir klasordeki tum OFF dosyalari icin:
 
 ```bash
 python3 -m meshfix.cli analyze \
-  "/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/cars" \
+  "inputs/cars" \
   --csv outputs/car_metrics.csv
 ```
 
@@ -52,7 +52,7 @@ Renkli PLY dosyasi uretmek icin:
 
 ```bash
 python3 -m meshfix.cli colorize \
-  "/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/joint_input.off" \
+  "inputs/joint_input.off" \
   --out outputs/figures/joint_input_quality.ply
 ```
 
@@ -60,7 +60,7 @@ Referans temiz output icin:
 
 ```bash
 python3 -m meshfix.cli colorize \
-  "/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/joint_output.off" \
+  "inputs/joint_output.off" \
   --out outputs/figures/joint_output_quality.ply
 ```
 
@@ -68,19 +68,19 @@ Tum araba modelleri icin:
 
 ```bash
 python3 -m meshfix.cli colorize \
-  "/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/cars" \
+  "inputs/cars" \
   --out-dir outputs/figures
 ```
 
 Polyscope ile interaktif gormek icin, proje klasorundeyken sunu calistir:
 
 ```bash
-"/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/venv/bin/python" \
+"venv/bin/python" \
   -m meshfix.cli view-quality \
-  "/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/joint_input.off"
+  "inputs/joint_input.off"
 ```
 
-Beklenen sonuc: `joint_input.off` uzerinde kirmizi bolgeler gormelisin.
+Beklenen sonuc: `joint_input.off` uzerinde kirmizi bolgeler.
 Ayni komutu `joint_output.off` ile calistirdiginda model neredeyse tamamen gri
 olmali. Bu, hocanin verdigi output'un temiz referans oldugunu gorsel olarak da
 dogrular.
@@ -102,7 +102,7 @@ oldugu icin ilk deneyde `0.045` kullaniyoruz:
 
 ```bash
 python3 -m meshfix.cli remesh-uniform \
-  "/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/joint_input.off" \
+  "inputs/joint_input.off" \
   --target-length 0.045 \
   --iterations 8 \
   --out outputs/meshes/joint_uniform_safe.off
@@ -119,7 +119,7 @@ Topoloji kontrolu:
 
 ```bash
 python3 -m meshfix.cli topology \
-  "/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/joint_input.off" \
+  "inputs/joint_input.off" \
   outputs/meshes/joint_uniform_safe.off
 ```
 
@@ -136,7 +136,7 @@ python3 -m meshfix.cli colorize \
 Interaktif gormek icin:
 
 ```bash
-"/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/venv/bin/python" \
+"venv/bin/python" \
   -m meshfix.cli view-quality \
   outputs/meshes/joint_uniform_safe.off
 ```
@@ -246,11 +246,11 @@ Joint, car1 ve car4 deneylerini tek tabloda toplamak icin:
 
 ```bash
 python3 -m meshfix.cli analyze \
-  "/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/joint_input.off" \
+  "inputs/joint_input.off" \
   outputs/meshes/joint_adaptive_final.off \
-  "/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/cars/car1.off" \
+  "inputs/cars/car1.off" \
   outputs/meshes/car1_cleanup.off \
-  "/Users/esadmazi/Documents/Akademi/METU/Yüksek Lisans/25-26 Spring/CENG589 - DGP/termproject/cars/car4.off" \
+  "inputs/cars/car4.off" \
   outputs/meshes/car4_cleanup.off \
   --csv outputs/experiment_summary.csv
 ```
@@ -264,4 +264,4 @@ python3 -m meshfix.cli topology \
   outputs/meshes/car4_cleanup.off
 ```
 
-Rapor taslagi: `report/report.md`
+Rapor: `report.pdf`
