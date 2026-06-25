@@ -1,267 +1,250 @@
 # CENG589 Mesh Quality Project
 
-Bu repo, CENG589 Digital Geometry Processing term project icin kuruluyor.
-Proje hedefi, verilen OFF mesh modellerindeki skinny/degenerate triangle
-problemini olcmek, gorsellestirmek ve remeshing tabanli bir pipeline ile
-iyilestirmek.
+This package contains the Python implementation, a dependency-free C++17 core
+port, report sources, input meshes, selected outputs, and diagnostic scripts for
+the CENG589 Digital Geometry Processing term project.
 
-## Step 1: baseline analysis
+The project studies skinny/degenerate triangles in OFF meshes. It measures
+triangle quality, visualizes bad triangles, applies targeted cleanup operations,
+and reports the shape-vs-quality trade-off observed during remeshing.
 
-Ilk adim sadece analiz yapar; mesh dosyalarini degistirmez.
+## Quick Start
 
-Ornek:
+Create/activate a Python environment and install optional visualization
+dependencies:
 
 ```bash
-python3 -m meshfix.cli analyze \
-  "inputs/joint_input.off" \
-  "inputs/joint_output.off" \
-  --csv outputs/metrics.csv
+python3 -m venv venv
+venv/bin/pip install -r requirements.txt
 ```
 
-Bir klasordeki tum OFF dosyalari icin:
+Most metric and cleanup commands use only the standard library. The viewer
+scripts need `numpy` and `polyscope`; report figure rendering also needs
+`matplotlib` and `Pillow`.
+
+Run the command-line tool:
 
 ```bash
-python3 -m meshfix.cli analyze \
-  "inputs/cars" \
-  --csv outputs/car_metrics.csv
+venv/bin/python run_meshfix.py --help
 ```
 
-## Current metrics
-
-- `min angle`: Modeldeki en kucuk ucgen acisi. Cok kucukse skinny triangle vardir.
-- `avg min`: Her ucgenin minimum acisinin ortalamasi. Genel kaliteyi ozetler.
-- `aspect<.05`: Shortest edge / longest edge orani cok dusuk ucgenler.
-- `needle-like`: Cok ince/uzun ucgenler.
-- `cap-like`: Maksimum acisi 175 derece uzerinde olan cap tipi ucgenler.
-- `bad`: Bu kalite testlerinden en az birine takilan toplam ucgen sayisi.
-
-## Step 2: visualize bad triangles
-
-Bu adimda mesh'i henuz duzeltmiyoruz. Sadece her triangle'i kalite etiketine
-gore renklendiriyoruz.
-
-Renkler:
-
-- gri: iyi triangle
-- kirmizi: needle, yani cok ince/uzun triangle
-- turuncu: shortest-edge / longest-edge orani cok dusuk triangle
-- mor: cap, yani bir acisi 175 derece civarinda olan triangle
-- siyah: alani neredeyse sifir triangle
-
-Renkli PLY dosyasi uretmek icin:
+Equivalent module form:
 
 ```bash
-python3 -m meshfix.cli colorize \
-  "inputs/joint_input.off" \
+venv/bin/python -m meshfix.cli --help
+```
+
+Build the C++ port:
+
+```bash
+cd cpp
+make clean && make
+cd ..
+```
+
+Run the C++ executable:
+
+```bash
+cpp/build/meshfix_cpp analyze \
+  inputs/joint_input.off \
+  outputs/meshes/joint_adaptive_final.off
+```
+
+## Core Commands
+
+Analyze input and output meshes:
+
+```bash
+venv/bin/python run_meshfix.py analyze \
+  inputs/joint_input.off \
+  inputs/joint_output.off \
+  inputs/cars \
+  --csv outputs/metrics/reproduced_baseline_metrics.csv
+```
+
+Color bad triangles as PLY:
+
+```bash
+venv/bin/python run_meshfix.py colorize \
+  inputs/joint_input.off \
   --out outputs/figures/joint_input_quality.ply
 ```
 
-Referans temiz output icin:
+Topology check:
 
 ```bash
-python3 -m meshfix.cli colorize \
-  "inputs/joint_output.off" \
-  --out outputs/figures/joint_output_quality.ply
+venv/bin/python run_meshfix.py topology \
+  outputs/meshes/joint_adaptive_final.off \
+  outputs/meshes/joint_input_direct_adaptive_cleanup_i8.off \
+  outputs/meshes/car3_targeted_cleanup.off
 ```
 
-Tum araba modelleri icin:
+Equivalent C++ metric/topology commands:
 
 ```bash
-python3 -m meshfix.cli colorize \
-  "inputs/cars" \
-  --out-dir outputs/figures
+cpp/build/meshfix_cpp analyze \
+  inputs/joint_input.off \
+  outputs/meshes/joint_adaptive_final.off \
+  outputs/meshes/car3_targeted_cleanup.off \
+  --csv outputs/cpp/cpp_smoke_metrics.csv
+
+cpp/build/meshfix_cpp topology \
+  outputs/meshes/joint_adaptive_final.off \
+  outputs/meshes/car3_targeted_cleanup.off
 ```
 
-Polyscope ile interaktif gormek icin, proje klasorundeyken sunu calistir:
+C++ targeted cleanup example:
 
 ```bash
-"venv/bin/python" \
-  -m meshfix.cli view-quality \
-  "inputs/joint_input.off"
+cpp/build/meshfix_cpp cleanup-degenerate \
+  inputs/cars/car3.off \
+  --out outputs/cpp/car3_cpp_cleanup.off \
+  --iterations 10
 ```
 
-Beklenen sonuc: `joint_input.off` uzerinde kirmizi bolgeler.
-Ayni komutu `joint_output.off` ile calistirdiginda model neredeyse tamamen gri
-olmali. Bu, hocanin verdigi output'un temiz referans oldugunu gorsel olarak da
-dogrular.
+The C++ cleanup is an independent port of the same targeted rule set. It is
+deterministic and dependency-free; because it is a separate implementation, the
+exact final mesh can differ slightly from the Python output while preserving the
+same measurement logic and cleanup behavior.
 
-## Step 3: uniform remeshing
+## Reproduce Main Joint Experiments
 
-Bu adim mesh'i ilk kez degistirir. Mantik:
-
-- hedef kenar uzunlugu sec
-- hedefin cok ustundeki kenarlari bol
-- hedefin cok altindaki kenarlari collapse et
-- topology'yi yirtmamak icin operasyonlari konservatif tut
-
-Edge flip ve smoothing opsiyonel/deneysel tutuluyor. Ilk guvenli deneyde
-kapali birakiyoruz.
-
-`joint_input.off` icin referans output'un median edge length'i yaklasik `0.044`
-oldugu icin ilk deneyde `0.045` kullaniyoruz:
+Uniform-based pipeline:
 
 ```bash
-python3 -m meshfix.cli remesh-uniform \
-  "inputs/joint_input.off" \
+venv/bin/python run_meshfix.py remesh-uniform \
+  inputs/joint_input.off \
   --target-length 0.045 \
   --iterations 8 \
   --out outputs/meshes/joint_uniform_safe.off
-```
 
-Beklenen ozet:
-
-```text
-joint_input.off         bad=258
-joint_uniform_safe.off  bad=43
-```
-
-Topoloji kontrolu:
-
-```bash
-python3 -m meshfix.cli topology \
-  "inputs/joint_input.off" \
-  outputs/meshes/joint_uniform_safe.off
-```
-
-Beklenen ozet: iki mesh icin de `boundary=0` ve `nonmanifold=0`.
-
-Output'u renklendirmek icin:
-
-```bash
-python3 -m meshfix.cli colorize \
-  outputs/meshes/joint_uniform_safe.off \
-  --out outputs/figures/joint_uniform_safe_quality.ply
-```
-
-Interaktif gormek icin:
-
-```bash
-"venv/bin/python" \
-  -m meshfix.cli view-quality \
-  outputs/meshes/joint_uniform_safe.off
-```
-
-Beklenen yorum: Kirmizi ucgen sayisi ciddi azalir, ama tamamen sifirlanmaz.
-Bu da bir sonraki adimda degenerate cleanup yapmamiz gerektigini gosterir.
-
-## Step 4: targeted degenerate cleanup
-
-Uniform remeshing sonrasi kalan kotu triangle'lari hedefli temizliyoruz.
-
-Mantik:
-
-- needle triangle: shortest edge collapse
-- cap triangle: longest edge split
-- her operasyon topology'yi bozmuyorsa uygulanir
-
-Calistir:
-
-```bash
-python3 -m meshfix.cli cleanup-degenerate \
+venv/bin/python run_meshfix.py cleanup-degenerate \
   outputs/meshes/joint_uniform_safe.off \
   --iterations 10 \
   --out outputs/meshes/joint_cleanup_targeted_i10.off
-```
 
-Beklenen ozet:
-
-```text
-joint_uniform_safe.off          bad=43
-joint_cleanup_targeted_i10.off  bad=0
-```
-
-Topoloji kontrolu:
-
-```bash
-python3 -m meshfix.cli topology \
-  outputs/meshes/joint_cleanup_targeted_i10.off
-```
-
-Beklenen ozet:
-
-```text
-boundary=0
-nonmanifold=0
-```
-
-Renklendir:
-
-```bash
-python3 -m meshfix.cli colorize \
-  outputs/meshes/joint_cleanup_targeted_i10.off \
-  --out outputs/figures/joint_cleanup_targeted_i10_quality.ply
-```
-
-Bu PLY dosyasinda model tamamen gri olmali.
-
-## Step 5: adaptive remeshing
-
-Dunyach fikrini burada ekliyoruz: hedef edge length sabit degil, curvature'a gore
-degisiyor.
-
-- curvature yuksek bolge: daha kucuk edge
-- duz bolge: daha buyuk edge
-- amac: daha iyi triangle dagilimi ve daha az gereksiz triangle
-
-Once temiz mesh uzerinde adaptive remesh:
-
-```bash
-python3 -m meshfix.cli remesh-adaptive \
+venv/bin/python run_meshfix.py remesh-adaptive \
   outputs/meshes/joint_cleanup_targeted_i10.off \
   --epsilon 0.002 \
   --min-length 0.025 \
   --max-length 0.075 \
   --iterations 5 \
   --out outputs/meshes/joint_cleanup_adaptive.off
-```
 
-Adaptive remesh sonrasi cok az kotu triangle olusabilir. Onlari tekrar temizle:
-
-```bash
-python3 -m meshfix.cli cleanup-degenerate \
+venv/bin/python run_meshfix.py cleanup-degenerate \
   outputs/meshes/joint_cleanup_adaptive.off \
   --iterations 5 \
   --out outputs/meshes/joint_adaptive_final.off
 ```
 
-Beklenen ozet:
+No-uniform follow-up experiment:
+
+```bash
+venv/bin/python run_meshfix.py remesh-adaptive \
+  inputs/joint_input.off \
+  --epsilon 0.002 \
+  --min-length 0.025 \
+  --max-length 0.075 \
+  --iterations 5 \
+  --out outputs/meshes/joint_input_direct_adaptive.off
+
+venv/bin/python run_meshfix.py cleanup-degenerate \
+  outputs/meshes/joint_input_direct_adaptive.off \
+  --iterations 8 \
+  --out outputs/meshes/joint_input_direct_adaptive_cleanup_i8.off
+```
+
+The uniform-based result reaches zero bad triangles but deforms the joint shape
+more visibly. The no-uniform candidate preserves shape better but leaves 16 bad
+triangles under the current thresholds.
+
+## Reproduce Car Cleanup
+
+```bash
+venv/bin/python run_meshfix.py cleanup-degenerate \
+  inputs/cars/car1.off \
+  --iterations 10 \
+  --out outputs/meshes/car1_targeted_cleanup.off
+
+venv/bin/python run_meshfix.py cleanup-degenerate \
+  inputs/cars/car2.off \
+  --iterations 10 \
+  --out outputs/meshes/car2_targeted_cleanup.off
+
+venv/bin/python run_meshfix.py cleanup-degenerate \
+  inputs/cars/car3.off \
+  --iterations 10 \
+  --out outputs/meshes/car3_targeted_cleanup.off
+
+venv/bin/python run_meshfix.py cleanup-degenerate \
+  inputs/cars/car4.off \
+  --iterations 10 \
+  --out outputs/meshes/car4_targeted_cleanup.off
+```
+
+Collect metrics:
+
+```bash
+venv/bin/python run_meshfix.py analyze \
+  inputs/cars/car1.off inputs/cars/car2.off inputs/cars/car3.off inputs/cars/car4.off \
+  outputs/meshes/car1_targeted_cleanup.off \
+  outputs/meshes/car2_targeted_cleanup.off \
+  outputs/meshes/car3_targeted_cleanup.off \
+  outputs/meshes/car4_targeted_cleanup.off \
+  --csv outputs/metrics/car_targeted_cleanup_metrics.csv
+```
+
+## Visualization
+
+View car input/cleanup quality side by side:
+
+```bash
+venv/bin/python scripts/view_quality_compare.py --all
+```
+
+View joint input, instructor reference, uniform-based final, and no-uniform
+candidate:
+
+```bash
+venv/bin/python scripts/view_joint_no_uniform.py --mode quality
+venv/bin/python scripts/view_joint_no_uniform.py --mode wireframe
+```
+
+Generate and view the car3 local diagnostic:
+
+```bash
+venv/bin/python scripts/car3_diagnostic.py --out-dir outputs/car3_diagnostic_v3
+venv/bin/python scripts/view_car3_diagnostic.py --out-dir outputs/car3_diagnostic_v3 --all
+```
+
+Render report PNGs from car3 diagnostic PLY patches:
+
+```bash
+python3 scripts/render_car3_diagnostic_figures.py --out-dir outputs/car3_diagnostic_v3
+```
+
+## Report
+
+The report source is in `report/report.tex`. It was compiled with Tectonic:
+
+```bash
+cd report
+tectonic report.tex
+```
+
+The compiled PDF is available as:
 
 ```text
-joint_cleanup_targeted_i10.off  F=13018  avg min=35.34  bad=0
-joint_adaptive_final.off        F=12126  avg min=42.13  bad=0
+report/report.pdf
 ```
 
-Topoloji kontrolu:
+## Directory Map
 
-```bash
-python3 -m meshfix.cli topology \
-  outputs/meshes/joint_adaptive_final.off
+```text
+meshfix/          Python implementation
+cpp/              C++17 core port and native executable source
+scripts/          Diagnostic and visualization helpers
+inputs/           Provided OFF meshes
+outputs/          Selected meshes, metrics, and diagnostic outputs
+report/           LaTeX report and figures
 ```
-
-Beklenen: `boundary=0`, `nonmanifold=0`.
-
-## Step 6: experiment summary and report
-
-Joint, car1 ve car4 deneylerini tek tabloda toplamak icin:
-
-```bash
-python3 -m meshfix.cli analyze \
-  "inputs/joint_input.off" \
-  outputs/meshes/joint_adaptive_final.off \
-  "inputs/cars/car1.off" \
-  outputs/meshes/car1_cleanup.off \
-  "inputs/cars/car4.off" \
-  outputs/meshes/car4_cleanup.off \
-  --csv outputs/experiment_summary.csv
-```
-
-Topoloji kontrolu:
-
-```bash
-python3 -m meshfix.cli topology \
-  outputs/meshes/joint_adaptive_final.off \
-  outputs/meshes/car1_cleanup.off \
-  outputs/meshes/car4_cleanup.off
-```
-
-Rapor: `report.pdf`

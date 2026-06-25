@@ -1,2 +1,52 @@
-venv
-docs/*
+# Python / local environment
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# macOS / editor state
+.DS_Store
+*.swp
+*.swo
+.polyscope.ini
+imgui.ini
+
+# Local git metadata accidentally copied into the submission folder
+.git/
+
+# C++ build products
+cpp/build/
+*.o
+*.out
+*.exe
+
+# LaTeX temporary files
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+
+# Large generated mesh/visualization outputs.
+# These are reproducible from the scripts and inputs, so keep them out of git.
+outputs/meshes/
+outputs/figures/
+outputs/cpp/
+outputs/car3_diagnostic/regions/
+outputs/car3_diagnostic/steps/
+
+# Keep small, useful experiment summaries for reproducibility.
+!outputs/
+!outputs/metrics/
+!outputs/metrics/*.csv
+!outputs/car3_diagnostic/
+!outputs/car3_diagnostic/*.csv
+!outputs/car3_diagnostic/README.md
+
+# Keep report sources, figures, and the final top-level PDF.
+# Avoid committing duplicate compiled PDFs inside the report source folder.
+report/report.pdf

@@ -10,7 +10,7 @@ Triangle meshes produced by CAD tessellators or other automatic conversion
 tools may contain very skinny or nearly degenerate triangles. These triangles
 are visually small, but they are harmful for geometry processing because they
 lead to unstable normals, poor numerical conditioning, and unreliable downstream
-operations. In this project, I implemented a mesh-quality pipeline inspired by
+operations. This project implements a mesh-quality pipeline inspired by
 Botsch and Kobbelt's robust degenerate-face removal procedure and Dunyach et
 al.'s adaptive isotropic remeshing approach.
 
@@ -130,10 +130,10 @@ provided `joint_output.off` contains none under the same thresholds.
 **Figure 1.** Quality visualization of the provided `joint_input.off`. Red
 triangles indicate needle-like degenerate triangles.
 
-![Instructor output quality](figures/fig02_joint_instructor_output_quality.png)
+![Reference output quality](figures/fig02_joint_reference_output_quality.png)
 
 **Figure 2.** Quality visualization of the provided `joint_output.off`. The mesh
-is almost entirely gray, confirming it as a clean reference output.
+is almost entirely gray, so it is used as a reference output for the joint model.
 
 ### 5.2 Conservative Uniform Remeshing
 
@@ -177,7 +177,7 @@ model from 43 to 0.
 ### 5.4 Adaptive Remeshing
 
 The adaptive stage follows the idea of Dunyach et al. by replacing a single
-global target edge length with a local sizing field. I implemented a simple
+global target edge length with a local sizing field. The implementation uses a simple
 curvature proxy based on vertex normal variation over one-ring edges. The
 resulting rule is:
 
@@ -205,7 +205,7 @@ detected bad triangles are removed and the topology remains clean.
 | `joint_adaptive_final.off` | 6061 | 12126 | 5.65 | 42.13 | 0 | 0 | 0 |
 | `joint_output.off` | 3400 | 6804 | 36.00 | 53.00 | 0 | 0 | 0 |
 
-The final adaptive result reaches the same bad-triangle count as the instructor
+The final adaptive result reaches the same bad-triangle count as the provided
 reference output: zero. It does not exactly reproduce the reference mesh, and it
 uses more triangles, but it demonstrates the intended cleanup behavior with a
 fully implemented and reproducible pipeline.

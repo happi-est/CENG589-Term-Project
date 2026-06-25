@@ -1,0 +1,12 @@
+name,vertices,faces,min_angle_deg,avg_min_angle_deg,max_angle_deg,avg_aspect_ratio,low_aspect_count,needle_like_count,cap_like_count,near_zero_area_count,bad_triangle_count
+joint_input.off,221,446,0.478030,9.352340,173.214755,0.168790,199,258,0,0,258
+joint_output.off,3400,6804,36.002756,53.002790,85.958363,0.867510,0,0,0,0,0
+joint_uniform_safe.off,6537,13078,0.055249,35.194743,179.791292,0.590569,2,43,9,0,43
+joint_cleanup_targeted_i10.off,6507,13018,5.032491,35.342621,168.792033,0.591831,0,0,0,0,0
+joint_adaptive_final.off,6061,12126,5.651194,42.130844,167.235149,0.695217,0,0,0,0,0
+joint_input_direct_targeted_i1.off,193,390,0.386074,10.675625,179.129141,0.193932,136,212,2,0,212
+joint_input_direct_targeted_i2.off,168,340,0.386074,12.306845,179.129141,0.228502,73,172,7,0,172
+joint_input_direct_targeted_i4.off,141,286,0.314700,14.383446,179.129141,0.282943,6,118,21,0,118
+joint_input_direct_targeted_i6.off,149,302,0.202325,13.711593,179.423871,0.311419,0,119,49,0,119
+joint_input_direct_adaptive.off,12089,24182,0.618146,23.639469,178.594409,0.416767,0,141,22,0,141
+joint_input_direct_adaptive_cleanup_i8.off,11996,23996,0.713848,23.777955,177.632823,0.417178,0,16,2,0,16

@@ -1,0 +1,9 @@
+name,vertices,faces,edges,boundary_edges,nonmanifold_edges,euler_characteristic
+car1.off,48798,97536,146336,64,0,-2
+car2.off,78708,157424,236136,0,0,-4
+car3.off,93450,186896,280344,0,0,2
+car4.off,14317,28630,42945,0,0,2
+car1_targeted_cleanup.off,48349,96638,144989,64,0,-2
+car2_targeted_cleanup.off,73912,147832,221748,0,0,-4
+car3_targeted_cleanup.off,84705,169406,254109,0,0,2
+car4_targeted_cleanup.off,12308,24612,36918,0,0,2

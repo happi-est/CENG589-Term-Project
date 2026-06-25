@@ -43,9 +43,9 @@
 \maketitle
 
 \begin{abstract}
-Triangle meshes produced by CAD tessellators or other automatic conversion tools may contain very skinny or nearly degenerate triangles. These triangles are visually small, but they are harmful for geometry processing because they lead to unstable normals, poor numerical conditioning, and unreliable downstream operations. In this project, I implemented a mesh-quality pipeline inspired by Botsch and Kobbelt's robust degenerate-face removal procedure~\cite{botsch2001degenerate} and Dunyach et al.'s adaptive isotropic remeshing approach~\cite{dunyach2013adaptive}.
+Triangle meshes produced by CAD tessellators or other automatic conversion tools may contain very skinny or nearly degenerate triangles. These triangles are visually small, but they are harmful for geometry processing because they lead to unstable normals, poor numerical conditioning, and unreliable downstream operations. This project implements a mesh-quality pipeline inspired by Botsch and Kobbelt's robust degenerate-face removal procedure~\cite{botsch2001degenerate} and Dunyach et al.'s adaptive isotropic remeshing approach~\cite{dunyach2013adaptive}.
 
-The implemented system reads OFF meshes, measures triangle quality, visualizes bad triangles, applies conservative remeshing operations, and finally removes remaining degenerate triangles using targeted local operations. The pipeline was tested on the provided joint model and two car models. On the joint model, the number of detected bad triangles was reduced from 258 to 0 while preserving closed topology. On the car models, the same cleanup idea removed almost all detected bad triangles without introducing non-manifold edges.
+The implemented system reads OFF meshes, measures triangle quality, visualizes bad triangles, applies conservative remeshing operations, and finally removes remaining degenerate triangles using targeted local operations. The pipeline was tested on the provided joint model and all four car models. On the joint model, the most aggressive pipeline reduced the number of detected bad triangles from 258 to 0 while preserving closed topology. A later follow-up experiment showed an important trade-off: the uniform remeshing stage improves quality metrics but can visibly deform the original shape, while a no-uniform variant preserves the shape better but leaves a small number of bad triangles. On the car models, targeted cleanup removed most detected bad triangles without introducing non-manifold edges.
 \end{abstract}
 
 \section{Introduction}
@@ -121,6 +121,87 @@ The project is implemented in Python as a small command-line package named \code
 
 Bad triangles are visualized with a simple color scheme: gray for acceptable triangles, red for needle-like triangles, orange for low aspect ratio triangles, purple for cap-like triangles, and black for near-zero area triangles.
 
+In addition to the Python implementation, the submission package includes a dependency-free C++17 port. This port contains the core OFF input/output, quality metrics, topology checks, and targeted degenerate-triangle cleanup. The Python version remains the main experimental implementation because it also contains visualization scripts, diagnostic figure generation, and the uniform/adaptive remeshing experiments. The C++ version is therefore used as a compiled reference implementation of the main measurable cleanup logic.
+
+\subsection{Algorithm Pseudocode}
+
+The implemented workflow is intentionally written as a sequence of measurable stages. The high-level algorithm is:
+
+\begin{verbatim}
+Algorithm 1: Mesh quality enhancement pipeline
+Input : OFF mesh M
+Output: cleaned mesh M_final, metrics, visual diagnostics
+
+1  M0 <- read_off(M)
+2  Q0 <- analyze_quality(M0)
+3  T0 <- analyze_topology(M0)
+4  export_quality_visualization(M0)
+
+5  if full remeshing experiment is enabled then
+6      Mu <- conservative_uniform_remesh(M0)
+7      Qu <- analyze_quality(Mu)
+8      Tu <- analyze_topology(Mu)
+9  else
+10     Mu <- M0
+
+11 Mc <- targeted_degenerate_cleanup(Mu)
+12 Qc <- analyze_quality(Mc)
+13 Tc <- analyze_topology(Mc)
+
+14 if adaptive remeshing experiment is enabled then
+15     Ma <- curvature_adaptive_remesh(Mc)
+16     M_final <- targeted_degenerate_cleanup(Ma)
+17 else
+18     M_final <- Mc
+
+19 export OFF, CSV metrics, topology report, and colored PLY figures
+\end{verbatim}
+
+The targeted cleanup stage is the most important local repair component:
+
+\begin{verbatim}
+Algorithm 2: Targeted degenerate cleanup
+Input : mesh M, number of iterations K
+Output: locally repaired mesh M
+
+for iter = 1..K:
+    bad_faces <- classify all faces of M
+    collapse_edges <- empty set
+    split_edges <- empty set
+
+    for each bad face f:
+        if f is cap-like:
+            add longest edge of f to split_edges
+        else if f is needle-like or low-aspect:
+            add shortest edge of f to collapse_edges
+
+    for each edge e in collapse_edges ordered by length:
+        collapse e only if the link/topology and area checks pass
+
+    recompute bad faces after collapses
+    for each remaining cap-like face:
+        split its longest edge consistently across all incident faces
+
+    remove duplicate and zero-area faces
+\end{verbatim}
+
+For the car3 case study, individual face indices are not stable because edge collapse and split operations delete and create triangles. Therefore, local regions are tracked using the original bad-triangle centroid:
+
+\begin{verbatim}
+Algorithm 3: Car3 local bad-triangle tracking
+Input : car3 mesh and cleanup steps M0...M10
+Output: local patch figures and tracking CSV
+
+1  select several severe bad faces from M0
+2  store each selected face centroid as a seed point
+3  for every cleanup step Mt:
+4      find the face nearest to each seed point
+5      extract a local patch around the seed point
+6      classify all patch faces
+7      record whether the tracked local face is bad or good
+8      export colored patch PLY and CSV statistics
+\end{verbatim}
+
 \section{Method}
 
 \subsection{Baseline Analysis}
@@ -137,7 +218,7 @@ The first step is to read the input OFF mesh and compute quality statistics with
   \hfill
   \begin{subfigure}{0.48\linewidth}
     \centering
-    \includegraphics[width=\linewidth]{fig02_joint_instructor_output_quality.png}
+    \includegraphics[width=\linewidth]{fig02_joint_reference_output_quality.png}
     \caption{\code{joint\_output.off}}
   \end{subfigure}
   \caption{Baseline quality visualization of the provided joint meshes. Red triangles indicate needle-like degenerate triangles, while gray triangles pass the quality tests.}
@@ -151,6 +232,8 @@ The first remeshing stage attempts to regularize edge lengths using local operat
 The initial implementation was intentionally tested visually and numerically. It revealed a common remeshing problem: splitting one triangle without consistently splitting its neighbor can create cracks or T-junction-like artifacts. This was fixed by globally consistent edge splitting, where all triangles sharing a split edge use the same midpoint.
 
 Another issue appeared with aggressive smoothing and edge flips. They improved some angle statistics but caused visible deformation and small topology defects. For this reason, the final uniform remeshing baseline uses conservative split and collapse operations, while flip and smoothing are kept as optional experimental flags.
+
+A separate visual inspection of this stage shows that even conservative uniform remeshing changes the original joint shape more than desired. This is not a topology failure: the mesh remains closed and non-manifold-free. The problem is geometric fidelity. Uniform remeshing is a global operation; once the coarse joint input is resampled into a much denser mesh, later targeted cleanup or adaptive remeshing works on the already modified surface and cannot recover the original shape exactly. Therefore, the uniform-based result is treated as a quality-optimized experiment rather than a perfect shape-preserving output.
 
 \begin{figure}[H]
   \centering
@@ -171,7 +254,7 @@ Each candidate operation is checked before it is accepted. Operations that would
 
 \subsection{Adaptive Remeshing}
 
-The adaptive stage follows the idea of Dunyach et al. by replacing a single global target edge length with a local sizing field. I implemented a simple curvature proxy based on vertex normal variation over one-ring edges. The resulting rule is:
+The adaptive stage follows the idea of Dunyach et al. by replacing a single global target edge length with a local sizing field. The implementation uses a simple curvature proxy based on vertex normal variation over one-ring edges. The resulting rule is:
 \begin{itemize}
   \item high normal variation: smaller target edge length;
   \item low normal variation: larger target edge length.
@@ -179,11 +262,23 @@ The adaptive stage follows the idea of Dunyach et al. by replacing a single glob
 
 On the joint model, adaptive remeshing improved the average minimum angle and reduced the number of triangles compared to the uniform-cleanup result. A final targeted cleanup pass was then applied to remove the few bad triangles created by adaptive operations.
 
+To test whether the visible deformation came mainly from uniform remeshing, a no-uniform experiment was also evaluated. In this variant, adaptive remeshing is applied directly to the original joint input mesh, followed by a targeted cleanup pass. This variant preserves the original appearance better in visual comparison, but it does not reach zero bad triangles. The best no-uniform candidate reduced the joint model from 258 bad triangles to 16.
+
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.72\linewidth]{fig04_joint_adaptive_final_quality.png}
-  \caption{Final result of the implemented pipeline on the joint model. All detected bad triangles are removed and the topology remains clean.}
-  \label{fig:joint-final}
+  \begin{subfigure}{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig04_joint_adaptive_final_quality.png}
+    \caption{Uniform-based final result: 0 bad triangles}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig10_joint_no_uniform_quality.png}
+    \caption{No-uniform candidate: 16 bad triangles}
+  \end{subfigure}
+  \caption{Joint model trade-off. The uniform-based pipeline is stronger according to the bad-triangle metric, but the no-uniform pipeline better preserves the original shape. Reporting both outputs makes the quality--fidelity trade-off explicit instead of treating the zero-bad-triangle result as the only meaningful result.}
+  \label{fig:joint-tradeoff}
 \end{figure}
 
 \section{Results}
@@ -192,7 +287,7 @@ On the joint model, adaptive remeshing improved the average minimum angle and re
 
 \begin{table}[H]
   \centering
-  \caption{Joint model results. Angles are in degrees.}
+  \caption{Joint model results. Angles are in degrees. The no-uniform candidate is included because it better explains the shape-preservation trade-off.}
   \label{tab:joint-results}
   \resizebox{\linewidth}{!}{%
   \begin{tabular}{lrrrrrrr}
@@ -202,16 +297,17 @@ On the joint model, adaptive remeshing improved the average minimum angle and re
     \code{joint\_input.off} & 221 & 446 & 0.48 & 9.35 & 258 & 0 & 0 \\
     \code{joint\_uniform\_safe.off} & 6537 & 13078 & 0.06 & 35.19 & 43 & 0 & 0 \\
     \code{joint\_adaptive\_final.off} & 6061 & 12126 & 5.65 & 42.13 & 0 & 0 & 0 \\
+    \code{joint\_input\_direct\_adaptive\_cleanup\_i8.off} & 11996 & 23996 & 0.71 & 23.78 & 16 & 0 & 0 \\
     \code{joint\_output.off} & 3400 & 6804 & 36.00 & 53.00 & 0 & 0 & 0 \\
     \bottomrule
   \end{tabular}}
 \end{table}
 
-The final adaptive result reaches the same bad-triangle count as the instructor reference output: zero. It does not exactly reproduce the reference mesh, and it uses more triangles, but it demonstrates the intended cleanup behavior with a fully implemented and reproducible pipeline.
+The final adaptive result reaches the same bad-triangle count as the provided reference output: zero. However, this result is built on top of the uniform remeshing stage, and visual inspection shows that this stage can deform the original joint shape. The no-uniform candidate does not remove every bad triangle, but it is useful because it separates shape preservation from pure triangle-quality optimization. In other words, the experiments show a real trade-off: the uniform-based pipeline is better according to the current bad-triangle metric, while the no-uniform candidate is more conservative with respect to the original shape.
 
 \subsection{Car Models}
 
-The car models are already much denser than the joint model. For these meshes, targeted cleanup was more practical than full adaptive remeshing. Direct adaptive remeshing on \code{car4} over-refined the mesh and became computationally expensive, so it was not used as the final car-model pipeline.
+The car models are already much denser than the joint model. For these meshes, targeted cleanup was more practical than full adaptive remeshing. Direct adaptive remeshing on \code{car4} over-refined the mesh and became computationally expensive, so it was not used as the final car-model pipeline. The car experiments therefore use the same targeted cleanup rule repeatedly: collapse safe shortest edges for needle-like triangles and split safe longest edges for cap-like triangles.
 
 \begin{table}[H]
   \centering
@@ -223,14 +319,71 @@ The car models are already much denser than the joint model. For these meshes, t
     Mesh & V & F & Min angle & Avg min angle & Bad triangles & Boundary & Non-manifold \\
     \midrule
     \code{car1.off} & 48798 & 97536 & 0.73 & 27.04 & 1400 & 64 & 0 \\
-    \code{car1\_cleanup.off} & 48349 & 96638 & 4.64 & 27.28 & 4 & 64 & 0 \\
+    \code{car1\_targeted\_cleanup.off} & 48349 & 96638 & 4.64 & 27.28 & 4 & 64 & 0 \\
+    \code{car2.off} & 78708 & 157424 & 0.22 & 23.27 & 11100 & 0 & 0 \\
+    \code{car2\_targeted\_cleanup.off} & 73912 & 147832 & 0.79 & 24.70 & 85 & 0 & 0 \\
+    \code{car3.off} & 93450 & 186896 & 0.49 & 21.93 & 23495 & 0 & 0 \\
+    \code{car3\_targeted\_cleanup.off} & 84705 & 169406 & 0.14 & 24.16 & 162 & 0 & 0 \\
     \code{car4.off} & 14317 & 28630 & 0.59 & 18.76 & 4787 & 0 & 0 \\
-    \code{car4\_cleanup.off} & 12308 & 24612 & 0.95 & 21.68 & 5 & 0 & 0 \\
+    \code{car4\_targeted\_cleanup.off} & 12308 & 24612 & 0.95 & 21.68 & 5 & 0 & 0 \\
     \bottomrule
   \end{tabular}}
 \end{table}
 
-For \code{car1}, the original mesh already has 64 boundary edges. The cleanup stage preserves this count and does not introduce non-manifold edges. For \code{car4}, the mesh starts closed and remains closed.
+For \code{car1}, the original mesh already has 64 boundary edges. The cleanup stage preserves this count and does not introduce non-manifold edges. The other car models start closed and remain closed. In ordinary shaded views, the car-model differences are often visually subtle because the meshes are dense and the problematic triangles are local. Therefore, quality-highlight views are used to make the affected regions easier to inspect. The result on \code{car3} is especially interesting: the total number of bad triangles drops strongly, but a small number of cap-like and needle-like cases remain because the cleanup rejects operations that would be unsafe or would create new local degeneracies.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig11_car1_top_highlight.png}
+    \caption{\code{car1}: top quality view}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig12_car2_top_highlight.png}
+    \caption{\code{car2}: top quality view}
+  \end{subfigure}
+
+  \vspace{0.5em}
+  \begin{subfigure}{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig13_car3_top_highlight.png}
+    \caption{\code{car3}: top quality view}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig14_car4_top_highlight.png}
+    \caption{\code{car4}: top quality view}
+  \end{subfigure}
+  \caption{Quality-highlight views for all car models. These views are more informative than plain shaded screenshots because the remaining bad triangles are local and can otherwise be hard to notice by eye.}
+  \label{fig:car-highlight-top}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.32\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig15_car2_side_highlight.png}
+    \caption{\code{car2}}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.32\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig16_car3_side_highlight.png}
+    \caption{\code{car3}}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.32\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig17_car4_side_highlight.png}
+    \caption{\code{car4}}
+  \end{subfigure}
+  \caption{Additional side views for the car models where local defects were easier to inspect from the side. These figures support the numerical table by showing where the cleanup affected local triangle quality.}
+  \label{fig:car-highlight-side}
+\end{figure}
 
 \begin{figure}[H]
   \centering
@@ -266,6 +419,56 @@ For \code{car1}, the original mesh already has 64 boundary edges. The cleanup st
   \label{fig:car1}
 \end{figure}
 
+\subsection{Car3 Local Case Study}
+
+To make the local behavior of the cleanup algorithm easier to follow, several representative bad-triangle regions from \code{car3.off} were examined in detail. A direct face-index tracking approach is not reliable here, because edge collapses and edge splits delete some triangles and create new ones. Instead, the analysis tracks local regions. For each selected bad triangle in the original \code{car3.off}, its centroid is stored, and at every cleanup step the nearest triangle to that centroid is found. A local patch around the same seed point is also extracted. This makes the tracking stable even when the actual face index changes.
+
+Figure~\ref{fig:car3-diagnostic} shows four representative regions. Region 1 starts as a cap-like triangle. Regions 2--4 start as needle-like triangles. Yellow marks the tracked local face, red marks needle-like triangles, purple marks cap-like triangles, and gray marks good triangles.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig09_car3_diagnostic_overview.png}
+  \caption{Car3 local diagnostic examples. Each row tracks one bad region through cleanup steps 0, 1, 3, 6, and 10. The tracked local face becomes good in all four cases, while the surrounding patch also loses most of its bad triangles.}
+  \label{fig:car3-diagnostic}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  \caption{Tracked car3 regions. The tracked local face is evaluated at the seed point in step 0 and again after step 10.}
+  \label{tab:car3-regions}
+  \resizebox{\linewidth}{!}{%
+  \begin{tabular}{lrrrrr}
+    \toprule
+    Region & Seed type & Seed face & Tracked label & Patch bad count & Tracked min angle \\
+    \midrule
+    R1 & cap & 17936 & cap $\rightarrow$ good & 141 $\rightarrow$ 12 & 1.08 $\rightarrow$ 14.59 \\
+    R2 & needle & 39860 & needle $\rightarrow$ good & 122 $\rightarrow$ 2 & 0.57 $\rightarrow$ 8.52 \\
+    R3 & needle & 87192 & needle $\rightarrow$ good & 105 $\rightarrow$ 0 & 0.79 $\rightarrow$ 5.62 \\
+    R4 & needle & 77475 & needle $\rightarrow$ good & 105 $\rightarrow$ 0 & 0.85 $\rightarrow$ 6.34 \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+The global car3 cleanup is shown in Table~\ref{tab:car3-steps}. The bad triangle count decreases from 23495 to 162 while preserving closed topology. The remaining bad triangles are not ignored; they are cases where the conservative operation checks prevent further changes or where later splits introduce new cap-like cases. This behavior is useful to report because it shows the algorithm's stopping limitation rather than hiding it.
+
+\begin{table}[H]
+  \centering
+  \caption{Car3 targeted cleanup progress.}
+  \label{tab:car3-steps}
+  \resizebox{0.92\linewidth}{!}{%
+  \begin{tabular}{rrrrrr}
+    \toprule
+    Step & V & F & Bad triangles & Collapses & Splits \\
+    \midrule
+    0 & 93450 & 186896 & 23495 & 0 & 0 \\
+    1 & 91406 & 182808 & 18500 & 2057 & 13 \\
+    3 & 88141 & 176278 & 10331 & 1427 & 18 \\
+    6 & 85483 & 170962 & 2632 & 660 & 8 \\
+    10 & 84705 & 169406 & 162 & 46 & 31 \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
 \section{Encountered Problems and Observations}
 
 Several implementation issues were useful for understanding the problem:
@@ -276,6 +479,8 @@ Several implementation issues were useful for understanding the problem:
   \item \textbf{Improving triangle angles is not enough.} Some early outputs had better angle statistics but worse topology. This is why boundary and non-manifold edge counts are reported in all experiments.
 
   \item \textbf{Smoothing may deform the shape.} Laplacian-like smoothing improved triangle regularity but visibly changed the object. Projection back to the original surface helped, but the final conservative pipeline avoids relying on smoothing.
+
+  \item \textbf{Uniform remeshing has a shape-preservation cost.} Even without smoothing, global uniform remeshing can move the result away from the original visual shape because it resamples the entire object. The no-uniform joint experiment reduced this problem visually, but it left 16 bad triangles instead of reaching zero.
 
   \item \textbf{Cleanup should be type-specific.} Splitting the longest edge of every bad triangle made some cases worse. The better rule was to collapse shortest edges for needles and split longest edges for caps.
 
@@ -314,11 +519,23 @@ python3 -m meshfix.cli
 Important output files include:
 \begin{itemize}
   \item \code{outputs/meshes/joint\_adaptive\_final.off}
-  \item \code{outputs/meshes/car1\_cleanup.off}
-  \item \code{outputs/meshes/car4\_cleanup.off}
+  \item \code{outputs/meshes/joint\_input\_direct\_adaptive\_cleanup\_i8.off}
+  \item \code{outputs/meshes/car1\_targeted\_cleanup.off}
+  \item \code{outputs/meshes/car2\_targeted\_cleanup.off}
+  \item \code{outputs/meshes/car3\_targeted\_cleanup.off}
+  \item \code{outputs/meshes/car4\_targeted\_cleanup.off}
   \item \code{outputs/experiment\_summary.csv}
   \item \code{outputs/joint\_adaptive\_final\_metrics.csv}
+  \item \code{outputs/joint\_no\_uniform\_experiment\_metrics.csv}
+  \item \code{outputs/car3\_diagnostic/car3\_region\_tracking.csv}
 \end{itemize}
+
+The car3 diagnostic figures can be regenerated with:
+\begin{verbatim}
+python3 scripts/car3_diagnostic.py --out-dir outputs/car3_diagnostic_v3
+python3 scripts/render_car3_diagnostic_figures.py \
+  --out-dir outputs/car3_diagnostic_v3
+\end{verbatim}
 
 \bibliographystyle{plain}
 \bibliography{references}
